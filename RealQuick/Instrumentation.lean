@@ -124,6 +124,7 @@ elab "#instrument " source:ident " as " target:ident : command => do
                 all_goals simp_all [$src, $dst, TimeM.value, TimeM.fst_done, TimeM.fst_step, TimeM.fst_seq,
                   TimeM.fst_ite, Bool.cond_eq_ite, nat_beq_value, int_neg_value, intEq, natEq, intLe,
                   natLe, intLt, natLt, arrayRead?, $helpers,*]
+                all_goals try omega
                 all_goals try rfl
                 all_goals try (constructor <;> rfl))
             else `(by
