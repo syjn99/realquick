@@ -1,25 +1,18 @@
+/-!
+Specification of lower-bound binary search over `Array Nat`.
+-/
+
 namespace Algorithms.BinarySearch.Correctness
 
-/-- An array is sorted when every successfully read earlier element is at most
-every successfully read later element. -/
+/-- `a` is sorted in nondecreasing order: `a[i] ≤ a[j]` whenever `i < j`. -/
 def Sorted (a : Array Nat) : Prop :=
-  ∀ (i j vi vj : Nat),
-    i < j → a[i]? = some vi → a[j]? = some vj → vi ≤ vj
+  ∀ i j (hij : i < j) (hj : j < a.size), a[i] ≤ a[j]
 
-/-- Every present value before `bound` is strictly below `key`. -/
-def Below (a : Array Nat) (key bound : Nat) : Prop :=
-  ∀ (i value : Nat), i < bound → a[i]? = some value → value < key
-
-/-- Every present value from `bound` onward is at least `key`. -/
-def AtOrAbove (a : Array Nat) (key bound : Nat) : Prop :=
-  ∀ (i value : Nat), bound ≤ i → a[i]? = some value → key ≤ value
-
-/-- A lower-bound search returns the first position whose value is at least the
-key, or the array size when every value is smaller. -/
+/-- On every sorted array, the result `r` satisfies `r ≤ a.size`, and every
+index `i` satisfies `i < r` exactly when `a[i] < key`. So `r` is the first index
+whose element is at least `key`, or `a.size` if there is none. -/
 def Correct (impl : Nat → Array Nat → Nat) : Prop :=
   ∀ key a, Sorted a →
-    let result := impl key a
-    result ≤ a.size ∧
-      Below a key result ∧ AtOrAbove a key result
+    impl key a ≤ a.size ∧ ∀ i (hi : i < a.size), (i < impl key a ↔ a[i] < key)
 
 end Algorithms.BinarySearch.Correctness

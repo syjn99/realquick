@@ -7,62 +7,76 @@ open Algorithms.BinarySearch.Impl
 
 namespace Algorithms.BinarySearch.Complexity
 
+/-!
+`lowerBound_timed key a` costs at most `42 * (log₂ n + 1) + 11` ticks, where
+`n = a.size`, so it is `O(log n)` uniformly in `key`.
+
+Each loop iteration costs at most 42 ticks. This includes two calls to
+`nextBounds` (16 ticks each), because `loop` passes both bounds as separate
+arguments instead of binding the pair once.
+-/
+
+/-- Logarithmic cost bound with a nonzero value at input size zero. -/
 def Bound (n : Nat) : Nat := Nat.log2 n + 1
 
-/-- A single interval update takes at most sixteen instrumentation ticks. -/
+theorem midpoint_timed_cost (lo hi : Nat) : (midpoint_timed lo hi).2 = 4 := rfl
+
+theorem readAt?_timed_cost (a : Array Nat) (i : Nat) : (readAt?_timed a i).2 = 2 := rfl
+
+theorem active_timed_cost (lo hi : Nat) : (active_timed lo hi).2 = 3 := rfl
+
+theorem lower_timed_cost (b : Nat × Nat) : (lower_timed b).2 = 2 := rfl
+
+theorem upper_timed_cost (b : Nat × Nat) : (upper_timed b).2 = 2 := rfl
+
+/-- One interval update costs at most 16 ticks. -/
 theorem nextBounds_cost (a : Array Nat) (key lo hi : Nat) :
     (nextBounds_timed a key lo hi).cost ≤ 16 := by
-  have hm (x y : Nat) : (midpoint_timed x y).cost = 4 := by rfl
-  have hr (x : Nat) : (readAt?_timed a x).cost = 2 := by rfl
-  simp only [nextBounds_timed, TimeM.cost, TimeM.snd_step, TimeM.snd_seq,
-    TimeM.fst_seq, midpoint_timed_value, readAt?_timed_value]
-  rw [show (midpoint_timed lo hi).2 = 4 from hm lo hi,
-    show (readAt?_timed a (midpoint lo hi)).2 = 2 from hr _]
-  cases h : readAt? a (midpoint lo hi) with
-  | none => simp [TimeM.step, TimeM.tick, Bind.bind]
-  | some v =>
-    cases hlt : VeriQuick.Instrumentation.natLt v key <;>
-      simp [TimeM.seq, TimeM.step, TimeM.tick, Bind.bind] <;>
-      dsimp only [TimeM] <;>
-      (simp [hlt]
-       have hc := hm lo hi
-       simp only [TimeM.cost] at hc
-       omega)
+  simp only [nextBounds_timed, TimeM.cost, TimeM.snd_step, TimeM.snd_seq, TimeM.fst_seq,
+    midpoint_timed_value, readAt?_timed_value, midpoint_timed_cost, readAt?_timed_cost]
+  split
+  · cases VeriQuick.Instrumentation.natLt _ key <;>
+      simp only [TimeM.snd_step, TimeM.snd_seq, TimeM.fst_step, TimeM.fst_done, TimeM.snd_done,
+        cond_true, cond_false, midpoint_timed_cost] <;> omega
+  · simp only [TimeM.snd_step, TimeM.snd_done]
+    omega
 
-/-- The instrumented loop spends at most fifty ticks per unit of fuel. -/
+/-- The loop costs at most 42 ticks per unit of fuel, plus 6. -/
 theorem loop_cost (a : Array Nat) (key fuel lo hi : Nat) :
-    (loop_timed a key fuel lo hi).cost ≤ 50 * fuel + 2 := by
-  induction fuel generalizing lo hi with
-  | zero =>
-    simp [loop_timed.eq_def, TimeM.cost, TimeM.step, TimeM.done,
-      TimeM.tick, Bind.bind]
-  | succ fuel ih =>
-    rw [loop_timed.eq_def]
-    simp only [TimeM.cost, TimeM.snd_step, TimeM.snd_seq]
-    have h1 := nextBounds_cost a key lo hi
-    have h2 := ih (lower (nextBounds a key lo hi)) (upper (nextBounds a key lo hi))
-    simp only [active_timed_value, nextBounds_timed_value] at *
-    simp [active_timed, lower_timed, upper_timed, TimeM.cost, TimeM.step,
-      TimeM.done, TimeM.seq, TimeM.tick, Bind.bind] at h1 h2 ⊢
-    simp only [lower, upper] at h2
-    cases hactive : active lo hi <;> simp [hactive] at * <;> omega
+    (loop_timed a key fuel lo hi).cost ≤ 42 * fuel + 6 := by
+  fun_induction loop a key fuel lo hi with
+  | case1 lo hi =>
+    rw [loop_timed]
+    simp only [TimeM.cost, TimeM.snd_step, TimeM.snd_done]
+    omega
+  | case2 fuel lo hi hact ih =>
+    rw [loop_timed]
+    have hnext := nextBounds_cost a key lo hi
+    simp only [TimeM.cost, TimeM.snd_step, TimeM.snd_seq, TimeM.fst_seq, active_timed_value,
+      nextBounds_timed_value, lower_timed_value, upper_timed_value, hact, active_timed_cost,
+      lower_timed_cost, upper_timed_cost] at hnext ih ⊢
+    omega
+  | case3 fuel lo hi hact =>
+    rw [loop_timed]
+    simp only [TimeM.cost, TimeM.snd_step, TimeM.snd_seq, active_timed_value, hact,
+      active_timed_cost, TimeM.snd_done]
+    omega
 
-/-- Uniformly in the key and array, the cost is at most 57 times the log bound. -/
+/-- Explicit tick bound for the whole search. -/
 theorem lowerBound_cost (key : Nat) (a : Array Nat) :
-    (lowerBound_timed key a).cost ≤ 57 * Bound a.size := by
+    (lowerBound_timed key a).cost ≤ 42 * Bound a.size + 11 := by
   have h := loop_cost a key (Nat.log2 a.size + 1) 0 a.size
-  simp [lowerBound_timed, Bound, TimeM.cost,
-    TimeM.step, TimeM.done, TimeM.seq, TimeM.tick,
-    Bind.bind] at *
+  simp only [lowerBound_timed, Bound, TimeM.cost, TimeM.snd_step, TimeM.snd_seq, TimeM.fst_seq,
+    TimeM.fst_step, TimeM.fst_done, TimeM.snd_done, Nat.add_eq] at h ⊢
   omega
 
-/-- For each key, the search cost is logarithmic in the array size. -/
+/-- For each key, the search cost is `O(log n)` in the array size. -/
 theorem lowerBound_asymptotic (key : Nat) :
-    Asymptotic (fun a : Array Nat => lowerBound_timed key a) (.some Bound) := by
-  change ∃ c n₀ : Nat, 0 < c ∧ ∀ a : Array Nat,
-    n₀ ≤ a.size → (lowerBound_timed key a).cost ≤ c * Bound a.size
-  refine ⟨57, 0, by omega, ?_⟩
-  intro a _
-  exact lowerBound_cost key a
+    Asymptotic (lowerBound_timed key) (.some Bound) := by
+  refine ⟨53, 0, by omega, fun a _ => ?_⟩
+  have h := lowerBound_cost key a
+  have : 1 ≤ Bound a.size := Nat.le_add_left 1 _
+  change (lowerBound_timed key a).cost ≤ 53 * Bound a.size
+  omega
 
 end Algorithms.BinarySearch.Complexity
